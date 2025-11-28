@@ -1,0 +1,16 @@
+# Sanal Ortam
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Veritabanı
+db.sqlite3
+
+# React Node Modülleri (Çok yer kaplar, yüklenmez)
+frontend/node_modules/
+
+# Sistem dosyaları
+.DS_Store
