@@ -1,78 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Modal from './components/Modal';
+import Login from './components/Login';
 
 function App() {
+  // LocalStorage'da token varsa giriş yapılmış say
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
+  
   const [todoList, setTodoList] = useState([]);
   const [modal, setModal] = useState(false);
   const [activeItem, setActiveItem] = useState({
     title: "",
     description: "",
     completed: false,
+    category: "diger"
   });
 
   useEffect(() => {
-    refreshList();
-  }, []);
+    if (isLoggedIn) {
+      refreshList();
+    }
+  }, [isLoggedIn]);
 
+  // --- KRİTİK NOKTA 1: Listeyi Çekerken Token Kullan ---
   const refreshList = () => {
+    const token = localStorage.getItem("token");
+    if (!token) return; // Token yoksa hiç deneme
+
     axios
-      .get("http://localhost:8000/api/todos/")
+      .get("http://localhost:8000/api/todos/", {
+        headers: {
+            Authorization: `Bearer ${token}` // <--- İŞTE BU SATIR EKSİK OLABİLİR
+        }
+      })
       .then((res) => setTodoList(res.data))
-      .catch((err) => console.log(err));
+      .catch((err) => console.log("Liste çekme hatası:", err));
   };
 
   const toggle = () => {
     setModal(!modal);
   };
 
-  // ----- YENİ VE GÜNCELLENMİŞ FONKSİYONLAR -----
-
-  // Kaydet butonuna basılınca çalışır
+  // --- KRİTİK NOKTA 2: Ekleme/Güncelleme Yaparken Token Kullan ---
   const handleSubmit = (item) => {
-    toggle(); // Modalı kapat
+    toggle();
+    const token = localStorage.getItem("token");
+    // Header ayarını bir değişkene atadık, tekrar tekrar yazmayalım
+    const config = { headers: { Authorization: `Bearer ${token}` } };
 
-    // EĞER item.id VARSA -> GÜNCELLEME (PUT) YAP
     if (item.id) {
       axios
-        .put(`http://localhost:8000/api/todos/${item.id}/`, item)
+        .put(`http://localhost:8000/api/todos/${item.id}/`, item, config)
         .then((res) => refreshList());
       return;
     }
-
-    // EĞER item.id YOKSA -> YENİ EKLE (POST) YAP
     axios
-      .post("http://localhost:8000/api/todos/", item)
+      .post("http://localhost:8000/api/todos/", item, config)
       .then((res) => refreshList());
   };
 
-  // Düzenle butonuna basılınca çalışır
-  const editItem = (item) => {
-    setActiveItem(item); // Tıklanan görevi aktif yap
-    setModal(true);      // Modalı aç
-  };
-
-  // Sil butonuna basılınca çalışır
+  // --- KRİTİK NOKTA 3: Silerken Token Kullan ---
   const handleDelete = (item) => {
-    if (window.confirm("Bu görevi silmek istediğine emin misin?")) {
-        axios
-        .delete(`http://localhost:8000/api/todos/${item.id}/`)
+    const token = localStorage.getItem("token");
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+
+    if (window.confirm("Silmek istediğine emin misin?")) {
+      axios
+        .delete(`http://localhost:8000/api/todos/${item.id}/`, config)
         .then((res) => refreshList());
     }
   };
 
   const createItem = () => {
-    // category: "diger" varsayılan olarak eklendi
     const item = { title: "", description: "", completed: false, category: "diger" };
     setActiveItem(item);
     setModal(true);
   };
 
-  // ----------------------------------------------
+  const editItem = (item) => {
+    setActiveItem(item);
+    setModal(true);
+  };
+
+  const handleLogout = () => {
+      localStorage.removeItem("token");
+      setIsLoggedIn(false);
+      setTodoList([]); // Çıkış yapınca listeyi temizle
+  };
+
+  // Giriş yapılmadıysa Login ekranını göster
+  if (!isLoggedIn) {
+      return (
+          <div className="container">
+              <Login onLoginSuccess={() => setIsLoggedIn(true)} />
+          </div>
+      );
+  }
 
   return (
     <div className="container mt-5">
-      <h1 className="text-center mb-4">Yapılacaklar Listesi</h1>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+          <h1 className="text-center">Yapılacaklar Listesi</h1>
+          <button className="btn btn-warning" onClick={handleLogout}>Çıkış Yap</button>
+      </div>
       
       <div className="mb-4">
         <button className="btn btn-primary" onClick={createItem}>
@@ -86,23 +116,17 @@ function App() {
             key={item.id}
             className="list-group-item d-flex justify-content-between align-items-center"
           >
-            {/* SOL TARAF: Başlık ve Kategori */}
-            <div className="d-flex align-items-center">
+             <div className="d-flex align-items-center">
               <span
                 title={item.description}
                 className={item.completed ? "text-decoration-line-through text-muted" : ""}
               >
                 {item.title}
               </span>
-              
-              {/* KATEGORİ ROZETİ */}
               <span className="badge bg-warning text-dark ms-2" style={{marginLeft: "10px", fontSize: "0.8em"}}>
-                 {/* Veritabanında 'is' yazar ama biz ekranda 'İş' göstermek isteyebiliriz, şimdilik direkt yazdıralım */}
                  {item.category ? item.category.toUpperCase() : "DİĞER"}
               </span>
             </div>
-
-            {/* SAĞ TARAF: Butonlar */}
             <span>
               <button
                 className="btn btn-secondary mr-2"

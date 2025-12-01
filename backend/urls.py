@@ -1,14 +1,22 @@
 from django.contrib import admin
-from django.urls import path, include                # include'u eklemeyi unutma
-from rest_framework import routers                   # Router modülü
-from todo import views                               # todo view'larını çağır
+from django.urls import path, include
+from rest_framework import routers
+from todo import views
 
-# Router nesnesi oluşturuyoruz
+# --- EKLENEN KISIM 1: JWT Kütüphanesini Çağırıyoruz ---
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
 router = routers.DefaultRouter()
-# Router'a diyoruz ki: 'todos' adresine gelindiğinde TodoView çalışsın
 router.register(r'todos', views.TodoView, 'todo')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include(router.urls)),              # API adreslerini ana yola bağlıyoruz
+    path('api/', include(router.urls)),
+    
+    # --- EKLENEN KISIM 2: Token Adreslerini Tanımlıyoruz ---
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
