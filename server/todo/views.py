@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from rest_framework import viewsets, permissions, generics
+from rest_framework import viewsets, permissions, generics, filters
 from .serializers import TodoSerializer, RegisterSerializer
 from .models import Todo
 from django.contrib.auth.models import User
@@ -8,6 +8,9 @@ class TodoView(viewsets.ModelViewSet):
     serializer_class = TodoSerializer
     # Kural 1: Sadece giriş yapmış kullanıcılar API'ye erişebilir
     permission_classes = [permissions.IsAuthenticated]
+    
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['title', 'description']
 
     # Kural 2: Listeleme yaparken filtre uygula
     def get_queryset(self):
