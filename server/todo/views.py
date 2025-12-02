@@ -1,7 +1,8 @@
 from django.shortcuts import render
-from rest_framework import viewsets, permissions
-from .serializers import TodoSerializer
+from rest_framework import viewsets, permissions, generics
+from .serializers import TodoSerializer, RegisterSerializer
 from .models import Todo
+from django.contrib.auth.models import User
 
 class TodoView(viewsets.ModelViewSet):
     serializer_class = TodoSerializer
@@ -16,3 +17,8 @@ class TodoView(viewsets.ModelViewSet):
     # Kural 3: Yeni kayıt eklerken 'owner' alanını otomatik doldur
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+        
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    permission_classes = (permissions.AllowAny,) # Herkes (giriş yapmayanlar da) erişebilsin
+    serializer_class = RegisterSerializer
