@@ -3,6 +3,7 @@ import axios from 'axios';
 import Modal from './components/Modal';
 import Login from './components/Login';
 import Register from './components/Register';
+import Dashboard from './components/Dashboard';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
@@ -122,6 +123,11 @@ function App() {
           <h1 className="text-center">Yapılacaklar Listesi</h1>
           <button className="btn btn-warning" onClick={handleLogout}>Çıkış Yap</button>
       </div>
+
+      {/* --- YENİ EKLENEN KISIM: DASHBOARD --- */}
+      <Dashboard />
+      <hr className="my-5" /> {/* Araya bir çizgi çekelim */}
+      {/* ----------------------------------- */}
 
       {/* --- 4. YENİ: ARAMA KUTUSU (Görünüm) --- */}
       <div className="row justify-content-center mb-4">
