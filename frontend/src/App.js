@@ -10,47 +10,33 @@ function App() {
   const [view, setView] = useState("login");
   const [todoList, setTodoList] = useState([]);
   
-  // Sayfalama State'leri
+  // --- 1. YENİ: Dashboard'u tetiklemek için sayaç ---
+  const [dashboardVersion, setDashboardVersion] = useState(0); 
+
   const [nextPage, setNextPage] = useState(null);
   const [prevPage, setPrevPage] = useState(null);
   const [currentPageUrl, setCurrentPageUrl] = useState("http://localhost:8000/api/todos/");
-  
-  // --- 1. YENİ: Arama State'i ---
   const [searchTerm, setSearchTerm] = useState("");
-
   const [activeCategory, setActiveCategory] = useState("all");
   const [modal, setModal] = useState(false);
-  const [activeItem, setActiveItem] = useState({
-    title: "",
-    description: "",
-    completed: false,
-    category: "diger"
-  });
+  const [activeItem, setActiveItem] = useState({ title: "", description: "", completed: false, category: "diger" });
 
   useEffect(() => {
-    if (isLoggedIn) {
-      refreshList();
-    }
+    if (isLoggedIn) refreshList();
     // eslint-disable-next-line
-  }, [isLoggedIn, currentPageUrl]); 
+  }, [isLoggedIn, currentPageUrl, dashboardVersion]); // dashboardVersion değişince de listeyi yenile
 
   const refreshList = () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    // --- 2. YENİ: Arama parametresini URL'ye ekle ---
-    // Eğer currentPageUrl zaten bir sayfalama linkiyse (?page=2), onu olduğu gibi kullan.
-    // Eğer ana link ise ve arama yapılıyorsa parametreyi ekle.
-    
-    let urlToFetch = currentPageUrl;
-    
-    // Basit bir mantık: Eğer kullanıcı arama butonuna bastıysa, URL'i sıfırlayıp aramayı ekleyeceğiz.
-    // Ancak bu useEffect içinde olduğu için, biz aramayı ayrı bir fonksiyonda tetikleyelim.
-    
-    axios
-      .get(urlToFetch, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+    // Arama varsa URL'e ekle
+    let url = currentPageUrl;
+    if(searchTerm && !url.includes("search")) {
+        url = `http://localhost:8000/api/todos/?search=${searchTerm}`;
+    }
+
+    axios.get(url, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => {
         setTodoList(res.data.results);
         setNextPage(res.data.next);
@@ -59,132 +45,165 @@ function App() {
       .catch((err) => console.log(err));
   };
 
-  // --- 3. YENİ: Arama Tetikleme Fonksiyonu ---
-  const handleSearch = (e) => {
-      e.preventDefault(); // Sayfa yenilenmesin
-      // URL'i sıfırla ve arama parametresini ekle
-      const url = `http://localhost:8000/api/todos/?search=${searchTerm}`;
-      setCurrentPageUrl(url); 
-      // setCurrentPageUrl değiştiği için useEffect çalışacak ve listeyi çekecek
-  };
-  
-  // Arama kutusunu temizleme
-  const clearSearch = () => {
-      setSearchTerm("");
-      setCurrentPageUrl("http://localhost:8000/api/todos/");
+  // --- 2. YENİ: Hızlı Tamamlama Fonksiyonu (Checkbox için) ---
+  const handleToggleComplete = (item) => {
+    const token = localStorage.getItem("token");
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+    
+    // Sadece 'completed' durumunu tersine çevirip gönderiyoruz
+    const updatedItem = { ...item, completed: !item.completed };
+
+    axios.put(`http://localhost:8000/api/todos/${item.id}/`, updatedItem, config)
+      .then(() => {
+          refreshList();
+          setDashboardVersion(v => v + 1); // Grafikleri yenile!
+      });
   };
 
   const toggle = () => setModal(!modal);
-  // ... (handleSubmit, handleDelete, createItem, editItem, handleLogout, getFilteredList AYNI KALSIN) ...
+
   const handleSubmit = (item) => {
     toggle();
     const token = localStorage.getItem("token");
     const config = { headers: { Authorization: `Bearer ${token}` } };
-    if (item.id) {
-      axios.put(`http://localhost:8000/api/todos/${item.id}/`, item, config).then(refreshList);
-      return;
-    }
-    axios.post("http://localhost:8000/api/todos/", item, config).then(refreshList);
+    
+    const request = item.id 
+        ? axios.put(`http://localhost:8000/api/todos/${item.id}/`, item, config)
+        : axios.post("http://localhost:8000/api/todos/", item, config);
+
+    request.then(() => {
+        refreshList();
+        setDashboardVersion(v => v + 1); // Grafikleri yenile!
+    });
   };
+
   const handleDelete = (item) => {
     const token = localStorage.getItem("token");
     const config = { headers: { Authorization: `Bearer ${token}` } };
     if (window.confirm("Silmek istediğine emin misin?")) {
-      axios.delete(`http://localhost:8000/api/todos/${item.id}/`, config).then(refreshList);
+      axios.delete(`http://localhost:8000/api/todos/${item.id}/`, config).then(() => {
+          refreshList();
+          setDashboardVersion(v => v + 1); // Grafikleri yenile!
+      });
     }
   };
-  const createItem = () => {
-    setActiveItem({ title: "", description: "", completed: false, category: "diger" });
-    setModal(true);
-  };
-  const editItem = (item) => {
-    setActiveItem(item);
-    setModal(true);
-  };
+
+  const createItem = () => { setActiveItem({ title: "", description: "", completed: false, category: "diger" }); setModal(true); };
+  const editItem = (item) => { setActiveItem(item); setModal(true); };
+  
   const handleLogout = () => {
       localStorage.removeItem("token");
       setIsLoggedIn(false);
       setTodoList([]);
       setView("login");
   };
-  const getFilteredList = () => {
-      if (activeCategory === "all") return todoList;
-      return todoList.filter(item => item.category === activeCategory);
-  };
+
+  const handleSearch = (e) => { e.preventDefault(); setCurrentPageUrl(`http://localhost:8000/api/todos/?search=${searchTerm}`); };
+  const clearSearch = () => { setSearchTerm(""); setCurrentPageUrl("http://localhost:8000/api/todos/"); };
+  const getFilteredList = () => { return activeCategory === "all" ? todoList : todoList.filter(item => item.category === activeCategory); };
 
   if (!isLoggedIn) {
-     if (view === "login") return <div className="container"><Login onLoginSuccess={() => setIsLoggedIn(true)} /><div className="text-center mt-3">Hesabın yok mu? <span style={{color:"blue", cursor:"pointer"}} onClick={() => setView("register")}>Kayıt Ol</span></div></div>;
-     else return <div className="container"><Register onRegisterSuccess={() => setView("login")} switchToLogin={() => setView("login")} /></div>;
+     return view === "login" 
+        ? <div className="container"><Login onLoginSuccess={() => setIsLoggedIn(true)} /><div className="text-center mt-3">Hesabın yok mu? <span className='text-primary' style={{cursor:"pointer"}} onClick={() => setView("register")}>Kayıt Ol</span></div></div>
+        : <div className="container"><Register onRegisterSuccess={() => setView("login")} switchToLogin={() => setView("login")} /></div>;
   }
 
   return (
-    <div className="container mt-5">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-          <h1 className="text-center">Yapılacaklar Listesi</h1>
-          <button className="btn btn-warning" onClick={handleLogout}>Çıkış Yap</button>
-      </div>
-
-      {/* --- YENİ EKLENEN KISIM: DASHBOARD --- */}
-      <Dashboard />
-      <hr className="my-5" /> {/* Araya bir çizgi çekelim */}
-      {/* ----------------------------------- */}
-
-      {/* --- 4. YENİ: ARAMA KUTUSU (Görünüm) --- */}
-      <div className="row justify-content-center mb-4">
-        <div className="col-md-8">
-            <form onSubmit={handleSearch} className="input-group">
-                <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="Görev ara..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <button className="btn btn-info" type="submit">Ara</button>
-                <button className="btn btn-secondary" type="button" onClick={clearSearch}>Temizle</button>
-            </form>
+    <div className="container-fluid min-vh-100 bg-light py-5">
+      <div className="container">
+        <div className="d-flex justify-content-between align-items-center mb-5">
+            <h2 className="fw-bold text-dark">🚀 Görev Yönetim Paneli</h2>
+            <button className="btn btn-outline-danger btn-sm" onClick={handleLogout}>Çıkış Yap</button>
         </div>
-      </div>
-      
-      {/* Kategori Butonları */}
-      <div className="mb-4 d-flex justify-content-center">
-        <div className="btn-group">
-            <button className={`btn ${activeCategory === 'all' ? 'btn-dark' : 'btn-outline-dark'}`} onClick={() => setActiveCategory('all')}>Hepsi</button>
-            <button className={`btn ${activeCategory === 'is' ? 'btn-dark' : 'btn-outline-dark'}`} onClick={() => setActiveCategory('is')}>İş</button>
-            <button className={`btn ${activeCategory === 'okul' ? 'btn-dark' : 'btn-outline-dark'}`} onClick={() => setActiveCategory('okul')}>Okul</button>
-            <button className={`btn ${activeCategory === 'kisisel' ? 'btn-dark' : 'btn-outline-dark'}`} onClick={() => setActiveCategory('kisisel')}>Kişisel</button>
-            <button className={`btn ${activeCategory === 'diger' ? 'btn-dark' : 'btn-outline-dark'}`} onClick={() => setActiveCategory('diger')}>Diğer</button>
-        </div>
-      </div>
 
-      <div className="mb-4 text-end">
-        <button className="btn btn-primary" onClick={createItem}>+ Yeni Görev Ekle</button>
-      </div>
+        {/* --- 3. DASHBOARD YENİLEME: 'key' prop'u sayesinde her işlemde yeniden çizilecek --- */}
+        <Dashboard key={dashboardVersion} />
+        
+        <hr className="my-5 text-secondary" />
 
-      <ul className="list-group mb-4">
-        {getFilteredList().length === 0 ? <div className='text-center text-muted'>Kayıt bulunamadı.</div> : null}
-
-        {getFilteredList().map((item) => (
-          <li key={item.id} className="list-group-item d-flex justify-content-between align-items-center">
-             <div className="d-flex align-items-center">
-              <span className={item.completed ? "text-decoration-line-through text-muted" : ""}>{item.title}</span>
-              <span className="badge bg-warning text-dark ms-2">{item.category ? item.category.toUpperCase() : "DİĞER"}</span>
+        <div className="row justify-content-center mb-4">
+            <div className="col-md-6">
+                <form onSubmit={handleSearch} className="input-group shadow-sm">
+                    <input type="text" className="form-control border-0" placeholder="Görev ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+                    <button className="btn btn-primary" type="submit"><i className="bi bi-search"></i> Ara</button>
+                    {searchTerm && <button className="btn btn-secondary" onClick={clearSearch}>X</button>}
+                </form>
             </div>
-            <span>
-              <button className="btn btn-secondary mr-2" onClick={() => editItem(item)}>Düzenle</button>
-              <button className="btn btn-danger" onClick={() => handleDelete(item)}>Sil</button>
-            </span>
-          </li>
-        ))}
-      </ul>
+        </div>
+        
+        <div className="d-flex justify-content-center mb-4 flex-wrap gap-2">
+            {['all', 'is', 'okul', 'kisisel', 'diger'].map(cat => (
+                <button 
+                    key={cat} 
+                    className={`btn btn-sm rounded-pill px-3 ${activeCategory === cat ? 'btn-dark' : 'btn-white border'}`} 
+                    onClick={() => setActiveCategory(cat)}
+                >
+                    {cat.toUpperCase()}
+                </button>
+            ))}
+        </div>
 
-      {/* Sayfalama Butonları */}
-      <div className="d-flex justify-content-center mb-5">
-        <button className="btn btn-outline-primary me-2" disabled={!prevPage} onClick={() => setCurrentPageUrl(prevPage)}>&laquo; Önceki</button>
-        <button className="btn btn-outline-primary" disabled={!nextPage} onClick={() => setCurrentPageUrl(nextPage)}>Sonraki &raquo;</button>
+        <div className="d-flex justify-content-end mb-3">
+            <button className="btn btn-success shadow-sm rounded-pill px-4" onClick={createItem}>+ Yeni Görev</button>
+        </div>
+
+        {/* --- 4. YENİ LİSTE TASARIMI: Modern Kartlar --- */}
+        <div className="row">
+            {getFilteredList().length === 0 && <div className='text-center text-muted py-5'>Kayıt bulunamadı.</div>}
+            
+            {getFilteredList().map((item) => (
+            <div key={item.id} className="col-12 mb-3">
+                <div className={`card border-0 shadow-sm p-3 ${item.completed ? 'bg-light opacity-75' : 'bg-white'}`} style={{transition: '0.3s'}}>
+                    <div className="d-flex justify-content-between align-items-center">
+                        
+                        {/* Sol Taraf: Checkbox ve Yazılar */}
+                        <div className="d-flex align-items-center gap-3">
+                            <div className="form-check">
+                                <input 
+                                    className="form-check-input" 
+                                    type="checkbox" 
+                                    checked={item.completed} 
+                                    onChange={() => handleToggleComplete(item)} // Tıklayınca anında tamamla
+                                    style={{transform: "scale(1.5)", cursor: "pointer"}}
+                                />
+                            </div>
+                            <div>
+                                <h5 className={`mb-1 ${item.completed ? "text-decoration-line-through text-muted" : "fw-bold"}`}>
+                                    {item.title}
+                                </h5>
+                                <p className="mb-0 text-muted small">{item.description}</p>
+                            </div>
+                        </div>
+
+                        {/* Sağ Taraf: Kategori ve Butonlar */}
+                        <div className="d-flex align-items-center gap-3">
+                            <span className={`badge rounded-pill ${
+                                item.category === 'is' ? 'bg-info' : 
+                                item.category === 'okul' ? 'bg-warning' : 
+                                item.category === 'kisisel' ? 'bg-success' : 'bg-secondary'
+                            }`}>
+                                {item.category.toUpperCase()}
+                            </span>
+                            
+                            <div className="btn-group">
+                                <button className="btn btn-outline-secondary btn-sm" onClick={() => editItem(item)}>✏️</button>
+                                <button className="btn btn-outline-danger btn-sm" onClick={() => handleDelete(item)}>🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ))}
+        </div>
+
+        <div className="d-flex justify-content-center mt-4">
+            <button className="btn btn-link text-decoration-none" disabled={!prevPage} onClick={() => setCurrentPageUrl(prevPage)}>Önceki Sayfa</button>
+            <span className='mx-3 text-muted'>|</span>
+            <button className="btn btn-link text-decoration-none" disabled={!nextPage} onClick={() => setCurrentPageUrl(nextPage)}>Sonraki Sayfa</button>
+        </div>
+
+        {modal ? <Modal activeItem={activeItem} toggle={toggle} onSave={handleSubmit} /> : null}
       </div>
-
-      {modal ? <Modal activeItem={activeItem} toggle={toggle} onSave={handleSubmit} /> : null}
     </div>
   );
 }
