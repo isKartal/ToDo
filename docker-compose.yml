@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # --- 1. VERİTABANI (PostgreSQL) ---
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=tododb
+      - POSTGRES_USER=todouser
+      - POSTGRES_PASSWORD=todopassword
+
+  # --- 2. BACKEND (Django) ---
+  backend:
+    build: ./server
+    command: python manage.py runserver 0.0.0.0:8000
+    restart: always
+    volumes:
+      - ./server:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_NAME=tododb
+      - DB_USER=todouser
+      - DB_PASS=todopassword
+
+  # --- 3. FRONTEND (React) ---
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
